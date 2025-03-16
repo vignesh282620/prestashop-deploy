@@ -9,6 +9,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    env:
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -20,17 +23,20 @@ jobs:
 
       - name: Deploy and Install PrestaShop
         run: |
-          ssh -o StrictHostKeyChecking=no ubuntu@13.234.169.134 << 'EOF'
+          ssh -o StrictHostKeyChecking=no ubuntu@13.234.169.134 << EOF
           
+            # Update and Install Dependencies
             sudo apt update && sudo apt upgrade -y
             sudo apt install apache2 mysql-server php php-mysql libapache2-mod-php php-cli php-curl php-zip php-gd php-mbstring php-xml php-bcmath php-json unzip -y
             
-            wget https://download.prestashop.com/download/releases/prestashop_8.1.3.zip
-            unzip prestashop_8.1.3.zip -d prestashop
+            # Download and Set Up PrestaShop
+            wget https://github.com/PrestaShop/PrestaShop/releases/download/8.1.4/prestashop_8.1.4.zip
+            unzip prestashop_8.1.4.zip -d prestashop
             sudo mv prestashop /var/www/html/prestashop
             sudo chown -R www-data:www-data /var/www/html/prestashop
             sudo chmod -R 755 /var/www/html/prestashop
             
+            # Configure Apache Virtual Host
             sudo bash -c 'cat <<EOT > /etc/apache2/sites-available/prestashop.conf
             <VirtualHost *:80>
                 ServerAdmin 13.234.169.134
@@ -46,17 +52,20 @@ jobs:
             </VirtualHost>
             EOT'
 
+            # Enable Site and Restart Apache
             sudo a2ensite prestashop.conf
             sudo a2enmod rewrite
+            sudo systemctl daemon-reexec
+            sudo systemctl reload apache2
             sudo systemctl restart apache2
 
+            # Configure MySQL Database
             sudo mysql -u root <<MYSQL_SCRIPT
             CREATE DATABASE IF NOT EXISTS prestashop;
-            CREATE USER IF NOT EXISTS 'ps_user'@'localhost' IDENTIFIED BY '${{ secrets.DB_PASSWORD }}';
+            CREATE USER IF NOT EXISTS 'ps_user'@'localhost' IDENTIFIED BY '${DB_PASSWORD}';
             GRANT ALL PRIVILEGES ON prestashop.* TO 'ps_user'@'localhost';
             FLUSH PRIVILEGES;
             MYSQL_SCRIPT
 
             echo "PrestaShop Deployment Complete"
           EOF
-
