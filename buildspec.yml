@@ -1,0 +1,46 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      php: 8.3
+    commands:
+      - echo Installing Apache, MySQL, PHP...
+      - sudo apt update && sudo apt install apache2 mysql-server php php-mysql libapache2-mod-php unzip -y
+      
+  pre_build:
+    commands:
+      - echo Downloading PrestaShop...
+      - wget https://download.prestashop.com/download/releases/prestashop_8.1.4.zip
+      - unzip prestashop_8.1.4.zip -d prestashop
+      
+  build:
+    commands:
+      - echo Deploying PrestaShop...
+      - sudo mv prestashop /var/www/html/prestashop
+      - sudo chown -R www-data:www-data /var/www/html/prestashop
+      - sudo chmod -R 755 /var/www/html/prestashop
+      - sudo bash -c 'cat > /etc/apache2/sites-available/prestashop.conf <<EOF
+<VirtualHost *:80>
+    ServerAdmin 13.234.169.134
+    DocumentRoot /var/www/html/prestashop
+    <Directory /var/www/html/prestashop/>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    ErrorLog \${APACHE_LOG_DIR}/error.log
+    CustomLog \${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+EOF'
+      - sudo a2ensite prestashop.conf
+      - sudo a2enmod rewrite
+      - sudo systemctl restart apache2
+      
+      # Create MySQL Database and User
+      - echo Setting up Database...
+      - sudo mysql -u root -e "CREATE DATABASE IF NOT EXISTS prestashop; CREATE USER IF NOT EXISTS 'ps_user'@'localhost' IDENTIFIED BY '${DB_PASSWORD}'; GRANT ALL PRIVILEGES ON prestashop.* TO 'ps_user'@'localhost'; FLUSH PRIVILEGES;"
+      
+artifacts:
+  files:
+    - '**/*'
